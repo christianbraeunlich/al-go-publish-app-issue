@@ -3,5 +3,6 @@
   "country": "w1",
   "appFolders": [],
   "testFolders": [],
-  "bcptTestFolders": []
+  "bcptTestFolders": [],
+  "useCompilerFolder": true
 }
