@@ -1,0 +1,11 @@
+{
+    "folders": [
+        {
+            "path": "My Custom DE Extension/app"
+        },
+        {
+            "path": "My Custom DE Extension/test"
+        }
+    ],
+    "settings": {}
+}

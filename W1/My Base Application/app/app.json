@@ -1,0 +1,16 @@
+{
+    "id": "c1a2b3d4-e5f6-47a8-90ab-cdef12300123",
+    "name": "My Base Application",
+    "version": "0.0.1.0",
+    "publisher": "christianbraeunlich",
+    "idRanges": [
+        {
+            "from": 70000,
+            "to": 71899
+        }
+    ],
+    "application": "25.0.0.0",
+    "platform": "0.0.0.0",
+    "runtime": "14.2",
+    "target": "Cloud"
+}
