@@ -1,10 +1,10 @@
 {
     "folders": [
         {
-            "path": "My Base Application/app"
+            "path": "My Base Application"
         },
         {
-            "path": "My Base Application/test"
+            "path": "My Base Application Test"
         }
     ],
     "settings": {}
