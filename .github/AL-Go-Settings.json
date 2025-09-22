@@ -5,5 +5,6 @@
   "useProjectDependencies": true,
   "templateSha": "920b9e1a65667be8e6d54cb478fae5f2847aa3ea",
   "country": "w1",
-  "versioningStrategy": 3
+  "versioningStrategy": 3,
+  "githubRunner": "my-runner"
 }
