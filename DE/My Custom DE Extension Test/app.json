@@ -1,7 +1,7 @@
 {
     "id": "cccbbba4-e5f6-47a8-90ab-cdef12300789",
     "name": "My Custom DE Extension Tests",
-    "version": "0.0.1.0",
+    "version": "25.10.3.0",
     "publisher": "christianbraeunlich",
     "idRanges": [
         {
@@ -17,13 +17,13 @@
         {
             "id": "cccbbba4-e5f6-47a8-90ab-cdef12300123",
             "name": "My Custom DE Extension",
-            "version": "0.0.1.0",
+            "version": "25.10.3.0",
             "publisher": "christianbraeunlich"
         },
         {
             "id": "c1a2b3d4-e5f6-47a8-90ab-cdef12300123",
             "name": "My Base Application",
-            "version": "0.0.1.0",
+            "version": "25.10.3.0",
             "publisher": "christianbraeunlich"
         },
         {
