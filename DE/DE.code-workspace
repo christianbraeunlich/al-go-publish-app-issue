@@ -1,10 +1,10 @@
 {
     "folders": [
         {
-            "path": "My Custom DE Extension/app"
+            "path": "My Custom DE Extension"
         },
         {
-            "path": "My Custom DE Extension/test"
+            "path": "My Custom DE Extension Test"
         }
     ],
     "settings": {}

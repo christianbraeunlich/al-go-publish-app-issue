@@ -1,7 +1,10 @@
 {
   "$schema": "https://raw.githubusercontent.com/microsoft/AL-Go-Actions/v7.3/.Modules/settings.schema.json",
-  "country": "us",
+  "country": "w1",
+  "artifact": "/onprem/*/w1",
   "appFolders": [],
   "testFolders": [],
-  "bcptTestFolders": []
+  "bcptTestFolders": [],
+  "useCompilerFolder": true,
+  "repoVersion": "25.11"
 }
