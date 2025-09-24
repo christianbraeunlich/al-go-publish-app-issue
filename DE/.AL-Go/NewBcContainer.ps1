@@ -40,6 +40,11 @@ Invoke-Sqlcmd `
     -ConnectionString $connectionString `
     -Query $queryScript
 
+$parameters.databaseServer = $databaseServer
+$parameters.databaseInstance = $databaseInstance
+$parameters.databaseName = $databaseName
+$parameters.databaseCredential = $databaseCredential
+
 New-BcContainer @parameters
 
 Invoke-ScriptInBcContainer -containerName $parameters.ContainerName -scriptblock { $progressPreference = 'SilentlyContinue' }
