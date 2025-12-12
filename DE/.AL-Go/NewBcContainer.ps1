@@ -30,8 +30,8 @@ $queryScript = @"
     RESTORE DATABASE [$databaseName]
     FROM DISK = N'C:\ProgramData\BcContainerHelper\temp\mydatabase'
     WITH REPLACE,
-        MOVE N'Demo Database BC (25-0)_Data' TO N'C:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\DATA\$databaseName.mdf',
-        MOVE N'Demo Database BC (25-0)_Log'  TO N'C:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\Log\$databaseName.ldf';
+        MOVE N'Demo Database BC (25-2)_Data' TO N'C:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\DATA\$databaseName.mdf',
+        MOVE N'Demo Database BC (25-2)_Log'  TO N'C:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\Log\$databaseName.ldf';
 
     ALTER DATABASE [$databaseName] SET RECOVERY SIMPLE, MULTI_USER;
 "@
