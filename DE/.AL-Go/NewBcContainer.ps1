@@ -44,6 +44,10 @@ $parameters.databaseServer = $databaseServer
 $parameters.databaseInstance = $databaseInstance
 $parameters.databaseName = $databaseName
 $parameters.databaseCredential = $databaseCredential
+
+$parameters.multitenant = $false
+$parameters.RunSandboxAsOnPrem = $true
+$parameters.memoryLimit = "16G"
 $parameters.keepContainer = $True
 
 New-BcContainer @parameters
