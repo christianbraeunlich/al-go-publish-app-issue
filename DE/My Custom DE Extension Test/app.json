@@ -9,7 +9,7 @@
       "to": 72999
     }
   ],
-  "application": "27.0.0.0",
+  "application": "27.5.0.0",
   "platform": "0.0.0.0",
   "runtime": "16.0",
   "target": "Cloud",
@@ -30,7 +30,7 @@
       "id": "dd0be2ea-f733-4d65-bb34-a28f4624fb14",
       "name": "Library Assert",
       "publisher": "Microsoft",
-      "version": "27.0.0.0"
+      "version": "27.5.0.0"
     }
   ]
 }
