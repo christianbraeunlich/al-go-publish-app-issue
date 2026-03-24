@@ -7,8 +7,8 @@ Write-Host "Restoring database from backup ..."
 $databaseServer = 'host.containerhelper.internal'
 $databaseInstance = ''
 $databaseName = 'CRONUS'
-$databaseUsername = 'bc-docker-devops'
-$databasePassword = '1234'
+$databaseUsername = 'admin'
+$databasePassword = 'P@ssw0rd'
 $databaseSecurePassword = ConvertTo-SecureString -String $databasePassword -AsPlainText -Force
 $databaseCredential = New-Object pscredential $databaseUsername, $databaseSecurePassword
 
