@@ -44,6 +44,7 @@ $parameters.databaseServer = $databaseServer
 $parameters.databaseInstance = $databaseInstance
 $parameters.databaseName = $databaseName
 $parameters.databaseCredential = $databaseCredential
+$parameters.keepContainer = $True
 
 New-BcContainer @parameters
 
