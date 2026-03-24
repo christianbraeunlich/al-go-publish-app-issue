@@ -30,8 +30,8 @@ $queryScript = @"
     RESTORE DATABASE [$databaseName]
     FROM DISK = N'C:\ProgramData\BcContainerHelper\temp\mydatabase'
     WITH REPLACE,
-        MOVE N'Navision_NAV_DE_Data' TO N'C:\databases\Navision_NAV_DE_FullApplication.mdf',
-        MOVE N'Navision_NAV_DE_Log'  TO N'C:\databases\Navision_NAV_DE_FullApplication.ldf';
+        MOVE N'Navision_NAV_DE_Data' TO N'C:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\DATA\Navision_NAV_DE_FullApplication.mdf',
+        MOVE N'Navision_NAV_DE_Log'  TO N'C:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\DATA\Navision_NAV_DE_FullApplication.ldf';
 
     ALTER DATABASE [$databaseName] SET RECOVERY SIMPLE, MULTI_USER;
 "@
