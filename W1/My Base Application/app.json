@@ -1,6 +1,6 @@
 {
   "id": "c1a2b3d4-e5f6-47a8-90ab-cdef12300123",
-  "name": "My Base Application",
+  "name": "CustomBaseApp",
   "version": "27.11.0.0",
   "publisher": "christianbraeunlich",
   "idRanges": [
