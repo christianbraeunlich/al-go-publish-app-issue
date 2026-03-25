@@ -49,6 +49,7 @@ $parameters.multitenant = $false
 $parameters.RunSandboxAsOnPrem = $true
 $parameters.memoryLimit = "16G"
 $parameters.keepContainer = $True
+$parameters.useDevEndpoint = $True
 
 New-BcContainer @parameters
 
