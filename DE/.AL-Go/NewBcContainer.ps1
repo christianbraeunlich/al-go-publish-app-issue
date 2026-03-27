@@ -45,10 +45,4 @@ $parameters.databaseInstance = $databaseInstance
 $parameters.databaseName = $databaseName
 $parameters.databaseCredential = $databaseCredential
 
-$parameters.multitenant = $false
-$parameters.RunSandboxAsOnPrem = $true
-#$parameters.memoryLimit = "16G"
-
 New-BcContainer @parameters
-
-#Invoke-ScriptInBcContainer -containerName $parameters.ContainerName -scriptblock { $progressPreference = 'SilentlyContinue' }
