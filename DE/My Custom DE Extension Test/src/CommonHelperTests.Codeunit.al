@@ -23,4 +23,12 @@ codeunit 72900 ClientRequestsTests
         Assert.AreEqual('Mo', clientRequests.WeekdayAbbreviation(1), 'Monday should be Mo');
     end;
 
+    [Test]
+    procedure TestDienstag()
+    var
+        clientRequests: Codeunit ClientRequests;
+    begin
+        Assert.AreEqual('Di', clientRequests.WeekdayAbbreviation(2), 'Dienstag should be Di');
+    end;
+
 }
