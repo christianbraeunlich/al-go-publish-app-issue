@@ -1,7 +1,8 @@
-$bcContainerHelperConfig.usePsSession = $false
 (
     [hashtable]$parameters
 )
+
+$bcContainerHelperConfig.usePsSession = $false
 
 Write-Host "Restoring database from backup ..."
 
