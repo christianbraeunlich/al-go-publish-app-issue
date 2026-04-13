@@ -18,5 +18,6 @@
     "parallelism": 0
   },
   "cacheKeepDays": 7,
-  "cacheImageName": "myotter"
+  "cacheImageName": "myotter",
+  "versionStrategy": 3
 }
