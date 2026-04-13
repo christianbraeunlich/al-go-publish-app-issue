@@ -13,11 +13,6 @@
     "onPull_Request": true,
     "mode": "modifiedApps"
   },
-  "workspaceCompilation": {
-    "enabled": true,
-    "parallelism": 0
-  },
   "cacheKeepDays": 7,
-  "cacheImageName": "myotter",
-  "versionStrategy": 3
+  "cacheImageName": "myotter"
 }
