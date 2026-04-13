@@ -1,3 +1,4 @@
+$bcContainerHelperConfig.usePsSession = $false
 (
     [hashtable]$parameters
 )
