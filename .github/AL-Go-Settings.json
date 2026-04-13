@@ -7,5 +7,16 @@
   "country": "w1",
   "versioningStrategy": 3,
   "useCompilerFolder": true,
-  "githubRunner": "my-runner"
+  "githubRunner": "my-runner",
+  "incrementalBuilds": {
+    "onPush": false,
+    "onPull_Request": true,
+    "mode": "modifiedApps"
+  },
+  "workspaceCompilation": {
+    "enabled": true,
+    "parallelism": 0
+  },
+  "cacheKeepDays": 7,
+  "cacheImageName": "myotter"
 }
