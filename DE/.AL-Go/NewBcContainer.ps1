@@ -152,31 +152,59 @@ function Ensure-TenantReadyForPublish {
             return
         }
 
-        $tenant = Get-NAVTenant -ServerInstance $serverInstance -Tenant $tenantId -ErrorAction Stop
-        Write-Host "Current tenant state: $($tenant.State)"
-
-        if ($tenant.State -eq 'OperationalWithSyncPending') {
-            Write-Host 'Tenant is OperationalWithSyncPending. Trying Sync-NAVTenant -Mode Sync...'
-            try {
-                Sync-NAVTenant -ServerInstance $serverInstance -Tenant $tenantId -Mode Sync -Force -ErrorAction Stop
-            }
-            catch {
-                Write-Host 'Sync mode failed, retrying with -Mode ForceSync...'
-                Sync-NAVTenant -ServerInstance $serverInstance -Tenant $tenantId -Mode ForceSync -Force -ErrorAction Stop
-            }
-        }
-
-        for ($i = 0; $i -lt 30; $i++) {
+        for ($attempt = 1; $attempt -le 3; $attempt++) {
             $tenant = Get-NAVTenant -ServerInstance $serverInstance -Tenant $tenantId -ErrorAction Stop
+            Write-Host "Current tenant state (attempt $attempt): $($tenant.State)"
+
             if ($tenant.State -eq 'Operational') {
                 Write-Host 'Tenant state is Operational.'
                 return
             }
-            Start-Sleep -Seconds 2
+
+            if ($tenant.State -eq 'OperationalWithSyncPending') {
+                if ($attempt -eq 1) {
+                    Write-Host 'Tenant is OperationalWithSyncPending. Trying Sync-NAVTenant -Mode Sync...'
+                    try {
+                        Sync-NAVTenant -ServerInstance $serverInstance -Tenant $tenantId -Mode Sync -Force -ErrorAction Stop
+                    }
+                    catch {
+                        Write-Host 'Sync mode failed, retrying with -Mode ForceSync...'
+                        Sync-NAVTenant -ServerInstance $serverInstance -Tenant $tenantId -Mode ForceSync -Force -ErrorAction Stop
+                    }
+                }
+                elseif ($attempt -eq 2) {
+                    Write-Host 'Tenant still sync pending. Restarting BC service tier once and retrying...'
+                    $bc = Get-Service 'MicrosoftDynamicsNavServer$BC' -ErrorAction Stop
+                    if ($bc.Status -eq 'Running') {
+                        Restart-Service 'MicrosoftDynamicsNavServer$BC' -Force -ErrorAction Stop
+                    }
+                    else {
+                        Start-Service 'MicrosoftDynamicsNavServer$BC' -ErrorAction Stop
+                    }
+                    $bc.WaitForStatus('Running', [TimeSpan]::FromMinutes(2))
+                }
+                else {
+                    Write-Host 'Final recovery attempt: ForceSync tenant after service restart...'
+                    Sync-NAVTenant -ServerInstance $serverInstance -Tenant $tenantId -Mode ForceSync -Force -ErrorAction Stop
+                }
+            }
+            else {
+                Write-Host "Tenant state '$($tenant.State)' is not ready. Restarting BC service tier before retry..."
+                $bc = Get-Service 'MicrosoftDynamicsNavServer$BC' -ErrorAction Stop
+                if ($bc.Status -eq 'Running') {
+                    Restart-Service 'MicrosoftDynamicsNavServer$BC' -Force -ErrorAction Stop
+                }
+                else {
+                    Start-Service 'MicrosoftDynamicsNavServer$BC' -ErrorAction Stop
+                }
+                $bc.WaitForStatus('Running', [TimeSpan]::FromMinutes(2))
+            }
+
+            Start-Sleep -Seconds 5
         }
 
         $tenant = Get-NAVTenant -ServerInstance $serverInstance -Tenant $tenantId -ErrorAction Stop
-        throw "Tenant state is '$($tenant.State)' and not ready for app publish."
+        throw "Tenant state is '$($tenant.State)' and not ready for app publish after recovery attempts."
     }
 }
 
