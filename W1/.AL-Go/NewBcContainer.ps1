@@ -1,4 +1,4 @@
-(
+Param(
     [hashtable]$parameters
 )
 
@@ -6,17 +6,17 @@ $bcContainerHelperConfig.usePsSession = $false
 
 $databaseServer   = 'host.containerhelper.internal'
 $databaseInstance = ''
-$databaseName     = 'CRONUS'
-$snapshotName     = 'CRONUS_snapshot'
+$databaseName     = 'CRONUS_W1'
+$snapshotName     = 'CRONUS_W1_snapshot'
 $databaseUsername = 'bc-docker-devops'
 $databasePassword = '1234'
-$backupPath       = 'C:\ProgramData\BcContainerHelper\temp\mydatabase'
+$backupPath       = 'C:\ProgramData\BcContainerHelper\temp\mydatabase_w1'
 $hashFile         = "$backupPath.restore_hash"
 $dataLogicalName  = 'Navision_NAV_DE_Data'
 $logLogicalName   = 'Navision_NAV_DE_Log'
-$mdfTarget        = 'C:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\DATA\Navision_NAV_DE_FullApplication.mdf'
-$ldfTarget        = 'C:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\DATA\Navision_NAV_DE_FullApplication.ldf'
-$snapshotFile     = 'C:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\DATA\CRONUS_snapshot.ss'
+$mdfTarget        = 'C:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\DATA\Navision_NAV_W1_FullApplication.mdf'
+$ldfTarget        = 'C:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\DATA\Navision_NAV_W1_FullApplication.ldf'
+$snapshotFile     = 'C:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\DATA\CRONUS_W1_snapshot.ss'
 
 $databaseSecurePassword = ConvertTo-SecureString -String $databasePassword -AsPlainText -Force
 $databaseCredential     = New-Object pscredential $databaseUsername, $databaseSecurePassword
