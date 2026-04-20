@@ -87,20 +87,64 @@ if ((-not (Test-BcContainer -containerName $parameters.containerName)) -and (Tes
 if (Test-BcContainer -containerName $parameters.containerName) {
     Write-Host "Container '$($parameters.containerName)' already exists - reusing (skipping container rebuild)."
 
-    # Ensure the container is running (no-op if already running)
-    docker start $parameters.containerName 2>&1 | Out-Null
+    try {
+        # Ensure the container is running (no-op if already running)
+        docker start $parameters.containerName 2>&1 | Out-Null
 
-    Invoke-Sqlcmd -ConnectionString $connectionString -Query $restoreScript -QueryTimeout 600
+        # Give Docker a short moment to fully transition the container to running.
+        $isRunning = $false
+        for ($i = 0; $i -lt 15; $i++) {
+            $state = docker inspect -f "{{.State.Running}}" $parameters.containerName 2>$null
+            if ($state -eq 'true') {
+                $isRunning = $true
+                break
+            }
+            Start-Sleep -Seconds 2
+        }
+        if (-not $isRunning) {
+            throw "Container '$($parameters.containerName)' did not reach running state after start."
+        }
 
-    Write-Host "Recreating database snapshot '$snapshotName' ..."
-    Invoke-Sqlcmd -ConnectionString $connectionString -Query $snapshotScript -QueryTimeout 120
+        Invoke-Sqlcmd -ConnectionString $connectionString -Query $restoreScript -QueryTimeout 600
 
-    if ($currentHash -ne $storedHash) { Set-Content -Path $hashFile -Value $currentHash }
+        Write-Host "Recreating database snapshot '$snapshotName' ..."
+        Invoke-Sqlcmd -ConnectionString $connectionString -Query $snapshotScript -QueryTimeout 120
 
-    Write-Host "Restarting BC service tier to pick up restored database ..."
-    Restart-BcContainerServiceTier -containerName $parameters.containerName
+        if ($currentHash -ne $storedHash) { Set-Content -Path $hashFile -Value $currentHash }
 
-    return
+        Write-Host "Restarting BC service tier to pick up restored database ..."
+        Restart-BcContainerServiceTier -containerName $parameters.containerName
+
+        $serviceRunning = Invoke-ScriptInBcContainer -containerName $parameters.containerName -scriptblock {
+            (Get-Service 'MicrosoftDynamicsNavServer$BC').Status -eq 'Running'
+        }
+        if (-not [bool]$serviceRunning) {
+            throw "BC service tier is not running after restart."
+        }
+
+        return
+    }
+    catch {
+        Write-Host "Reusable container failed health checks, falling back to fresh container build."
+        Write-Host $_.Exception.Message
+
+        try {
+            Invoke-ScriptInBcContainer -containerName $parameters.containerName -scriptblock {
+                Get-Service | Where-Object { $_.Name -like 'MicrosoftDynamicsNavServer*' -or $_.Name -like 'MSSQL*' } |
+                    Select-Object Name, Status | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
+            }
+        }
+        catch {
+            Write-Host "Unable to query service status from reused container."
+        }
+
+        try {
+            Remove-BcContainer -containerName $parameters.containerName -force
+        }
+        catch {
+            docker rm -f $parameters.containerName 2>&1 | Out-Null
+        }
+    }
 }
 
 # Container does not exist - full setup
