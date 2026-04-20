@@ -1,4 +1,4 @@
-(
+Param(
     [hashtable]$parameters
 )
 
@@ -31,9 +31,9 @@ $snapshotExistsResult = Invoke-Sqlcmd -ConnectionString $connectionString `
     -QueryTimeout 30
 $snapshotExists = [bool]$snapshotExistsResult.SnapshotExists
 
+# Build the restore script (shared by both the container-reuse and fresh-container paths)
 if ($currentHash -eq $storedHash -and $snapshotExists) {
     Write-Host "Restoring database from snapshot '$snapshotName' (fast path) ..."
-
     $restoreScript = @"
 DECLARE @terminate NVARCHAR(MAX) = N'';
 SELECT @terminate = @terminate + 'KILL ' + CAST(session_id AS NVARCHAR(10)) + ';'
@@ -47,7 +47,6 @@ ALTER DATABASE [$databaseName] SET RECOVERY SIMPLE, MULTI_USER;
 "@
 } else {
     Write-Host "Restoring database from backup (full restore) ..."
-
     $restoreScript = @"
 DECLARE @terminate NVARCHAR(MAX) = N'';
 SELECT @terminate = @terminate + 'KILL ' + CAST(session_id AS NVARCHAR(10)) + ';'
@@ -68,21 +67,40 @@ ALTER DATABASE [$databaseName] SET RECOVERY SIMPLE, MULTI_USER;
 "@
 }
 
-Invoke-Sqlcmd -ConnectionString $connectionString -Query $restoreScript -QueryTimeout 600
-
-# Recreate snapshot (fast path dropped it automatically; slow path needs it fresh)
-Write-Host "Creating database snapshot '$snapshotName' ..."
 $snapshotScript = @"
 CREATE DATABASE [$snapshotName] ON
     (NAME = N'$dataLogicalName', FILENAME = N'$snapshotFile')
 AS SNAPSHOT OF [$databaseName];
 "@
+
+# If the container already exists, reuse it — only restore the DB and restart the service tier.
+# RemoveBcContainer.ps1 is intentionally empty, so the container persists between CI runs.
+if (Test-BcContainer -containerName $parameters.containerName) {
+    Write-Host "Container '$($parameters.containerName)' already exists — reusing (skipping container rebuild)."
+
+    # Ensure the container is running (no-op if already running)
+    docker start $parameters.containerName 2>&1 | Out-Null
+
+    Invoke-Sqlcmd -ConnectionString $connectionString -Query $restoreScript -QueryTimeout 600
+
+    Write-Host "Recreating database snapshot '$snapshotName' ..."
+    Invoke-Sqlcmd -ConnectionString $connectionString -Query $snapshotScript -QueryTimeout 120
+
+    if ($currentHash -ne $storedHash) { Set-Content -Path $hashFile -Value $currentHash }
+
+    Write-Host "Restarting BC service tier to pick up restored database ..."
+    Restart-BcContainerServiceTier -containerName $parameters.containerName
+
+    return
+}
+
+# Container does not exist — full setup
+Invoke-Sqlcmd -ConnectionString $connectionString -Query $restoreScript -QueryTimeout 600
+
+Write-Host "Creating database snapshot '$snapshotName' ..."
 Invoke-Sqlcmd -ConnectionString $connectionString -Query $snapshotScript -QueryTimeout 120
 
-# Persist hash so the next run can take the fast path
-if ($currentHash -ne $storedHash) {
-    Set-Content -Path $hashFile -Value $currentHash
-}
+if ($currentHash -ne $storedHash) { Set-Content -Path $hashFile -Value $currentHash }
 
 $parameters.databaseServer     = $databaseServer
 $parameters.databaseInstance   = $databaseInstance
