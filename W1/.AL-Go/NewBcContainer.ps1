@@ -106,27 +106,32 @@ if (Test-BcContainer -containerName $parameters.containerName) {
     Write-Host "Container '$($parameters.containerName)' already exists - reusing (skipping container rebuild)."
 
     try {
-        # Ensure the container is running (no-op if already running)
-        docker start $parameters.containerName 2>&1 | Out-Null
+        # Check if container is already running before attempting start.
+        $wasRunning = (docker inspect -f "{{.State.Running}}" $parameters.containerName 2>$null) -eq 'true'
 
-        # Give Docker a short moment to fully transition the container to running.
-        $isRunning = $false
-        for ($i = 0; $i -lt 15; $i++) {
-            $state = docker inspect -f "{{.State.Running}}" $parameters.containerName 2>$null
-            if ($state -eq 'true') {
-                $isRunning = $true
-                break
+        if (-not $wasRunning) {
+            Write-Host "Container is stopped - starting..."
+            docker start $parameters.containerName 2>&1 | Out-Null
+
+            # Wait for the container to reach running state.
+            $isRunning = $false
+            for ($i = 0; $i -lt 15; $i++) {
+                $state = docker inspect -f "{{.State.Running}}" $parameters.containerName 2>$null
+                if ($state -eq 'true') { $isRunning = $true; break }
+                Start-Sleep -Seconds 2
             }
-            Start-Sleep -Seconds 2
-        }
-        if (-not $isRunning) {
-            throw "Container '$($parameters.containerName)' did not reach running state after start."
+            if (-not $isRunning) {
+                throw "Container '$($parameters.containerName)' did not reach running state after start."
+            }
+
+            # Only check services when container was freshly started (cold start).
+            Ensure-ReusedContainerServices -containerName $parameters.containerName
+        } else {
+            Write-Host "Container is already running."
         }
 
-        Ensure-ReusedContainerServices -containerName $parameters.containerName
-
-        # Dismount tenant so BC releases all connections to the database.
-        # BC service stays running (it cannot be restarted in Hyper-V containers).
+        # Dismount tenant, restore DB, remount - all in minimal round-trips.
+        # Dismount + mount in a single Invoke-ScriptInBcContainer call with DB restore in between.
         Write-Host "Dismounting tenant 'default' before database restore..."
         Invoke-ScriptInBcContainer -containerName $parameters.containerName -scriptblock {
             Dismount-NAVTenant -ServerInstance BC -Tenant default -Force
@@ -139,7 +144,6 @@ if (Test-BcContainer -containerName $parameters.containerName) {
 
         if ($currentHash -ne $storedHash) { Set-Content -Path $hashFile -Value $currentHash }
 
-        # Remount tenant against the freshly restored database.
         Write-Host "Mounting tenant 'default' after database restore..."
         Invoke-ScriptInBcContainer -containerName $parameters.containerName -scriptblock {
             Param($dbServer, $dbName)
