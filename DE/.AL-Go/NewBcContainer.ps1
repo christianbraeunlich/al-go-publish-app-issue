@@ -22,6 +22,8 @@ $databaseSecurePassword = ConvertTo-SecureString -String $databasePassword -AsPl
 $databaseCredential     = New-Object pscredential $databaseUsername, $databaseSecurePassword
 $connectionString       = "Server=localhost;Database=master;User Id=$databaseUsername;Password=$databasePassword;"
 $persistentContainerName = 'bcDEpersistent'
+# Default to fastest possible reuse. Set ALGO_FORCE_CLEAN_RESTORE=1 to restore DB every run.
+$forceCleanRestore = (($env:ALGO_FORCE_CLEAN_RESTORE -eq '1') -or ($env:ALGO_FORCE_CLEAN_RESTORE -eq 'true'))
 
 # Determine whether a valid snapshot exists for the current backup
 $currentHash = (Get-FileHash -Path $backupPath -Algorithm MD5).Hash
@@ -127,6 +129,12 @@ if (Test-BcContainer -containerName $parameters.containerName) {
             Ensure-ReusedContainerServices -containerName $parameters.containerName
         } else {
             Write-Host "Container is already running."
+        }
+
+        if (-not $forceCleanRestore) {
+            Write-Host "Instant reuse enabled - skipping database restore and tenant remount."
+            Write-Host "Set ALGO_FORCE_CLEAN_RESTORE=1 to force a clean restore path."
+            return
         }
 
         # Dismount tenant, restore DB, remount - all in minimal round-trips.
