@@ -92,122 +92,7 @@ function Ensure-ReusedContainerServices {
     }
 }
 
-function Ensure-BcServiceRunningWithRecovery {
-    Param(
-        [string]$containerName
-    )
 
-    $alreadyRunning = Invoke-ScriptInBcContainer -containerName $containerName -scriptblock {
-        (Get-Service 'MicrosoftDynamicsNavServer$BC').Status -eq 'Running'
-    }
-    if ([bool]$alreadyRunning) {
-        Write-Host "BC service tier is already running - no restart needed."
-        return
-    }
-
-    $lastErrorMessage = ''
-    for ($attempt = 1; $attempt -le 2; $attempt++) {
-        try {
-            Write-Host "Starting BC service tier (attempt $attempt)..."
-            Invoke-ScriptInBcContainer -containerName $containerName -scriptblock {
-                $bc = Get-Service 'MicrosoftDynamicsNavServer$BC'
-                if ($bc.Status -ne 'Running') {
-                    Start-Service 'MicrosoftDynamicsNavServer$BC'
-                    $bc.WaitForStatus('Running', [TimeSpan]::FromMinutes(2))
-                }
-            }
-
-            $serviceRunning = Invoke-ScriptInBcContainer -containerName $containerName -scriptblock {
-                (Get-Service 'MicrosoftDynamicsNavServer$BC').Status -eq 'Running'
-            }
-            if ([bool]$serviceRunning) {
-                return
-            }
-
-            $lastErrorMessage = 'BC service tier is not running after restart.'
-        }
-        catch {
-            $lastErrorMessage = $_.Exception.Message
-        }
-
-        if ($attempt -lt 2) {
-            Write-Host "BC service start failed, retrying after SQL service recovery..."
-            Ensure-ReusedContainerServices -containerName $containerName
-        }
-    }
-
-    throw $lastErrorMessage
-}
-
-function Ensure-TenantReadyForPublish {
-    Param(
-        [string]$containerName
-    )
-
-    Invoke-ScriptInBcContainer -containerName $containerName -scriptblock {
-        $serverInstance = 'BC'
-        $tenantId = 'default'
-
-        if (-not (Get-Command Get-NAVTenant -ErrorAction SilentlyContinue)) {
-            Write-Host 'Get-NAVTenant is not available in this container, skipping tenant state validation.'
-            return
-        }
-
-        for ($attempt = 1; $attempt -le 3; $attempt++) {
-            $tenant = Get-NAVTenant -ServerInstance $serverInstance -Tenant $tenantId -ErrorAction Stop
-            Write-Host "Current tenant state (attempt $attempt): $($tenant.State)"
-
-            if ($tenant.State -eq 'Operational') {
-                Write-Host 'Tenant state is Operational.'
-                return
-            }
-
-            if ($tenant.State -eq 'OperationalWithSyncPending') {
-                if ($attempt -eq 1) {
-                    Write-Host 'Tenant is OperationalWithSyncPending. Trying Sync-NAVTenant -Mode Sync...'
-                    try {
-                        Sync-NAVTenant -ServerInstance $serverInstance -Tenant $tenantId -Mode Sync -Force -ErrorAction Stop
-                    }
-                    catch {
-                        Write-Host 'Sync mode failed, retrying with -Mode ForceSync...'
-                        Sync-NAVTenant -ServerInstance $serverInstance -Tenant $tenantId -Mode ForceSync -Force -ErrorAction Stop
-                    }
-                }
-                elseif ($attempt -eq 2) {
-                    Write-Host 'Tenant still sync pending. Restarting BC service tier once and retrying...'
-                    $bc = Get-Service 'MicrosoftDynamicsNavServer$BC' -ErrorAction Stop
-                    if ($bc.Status -eq 'Running') {
-                        Restart-Service 'MicrosoftDynamicsNavServer$BC' -Force -ErrorAction Stop
-                    }
-                    else {
-                        Start-Service 'MicrosoftDynamicsNavServer$BC' -ErrorAction Stop
-                    }
-                    $bc.WaitForStatus('Running', [TimeSpan]::FromMinutes(2))
-                }
-                else {
-                    Write-Host 'Final recovery attempt: ForceSync tenant after service restart...'
-                    Sync-NAVTenant -ServerInstance $serverInstance -Tenant $tenantId -Mode ForceSync -Force -ErrorAction Stop
-                }
-            }
-            else {
-                Write-Host "Tenant state '$($tenant.State)' is not ready. Restarting BC service tier before retry..."
-                $bc = Get-Service 'MicrosoftDynamicsNavServer$BC' -ErrorAction Stop
-                if ($bc.Status -eq 'Running') {
-                    Restart-Service 'MicrosoftDynamicsNavServer$BC' -Force -ErrorAction Stop
-                }
-                else {
-                    Start-Service 'MicrosoftDynamicsNavServer$BC' -ErrorAction Stop
-                }
-                $bc.WaitForStatus('Running', [TimeSpan]::FromMinutes(2))
-            }
-
-            Start-Sleep -Seconds 5
-        }
-
-        $tenant = Get-NAVTenant -ServerInstance $serverInstance -Tenant $tenantId -ErrorAction Stop
-        throw "Tenant state is '$($tenant.State)' and not ready for app publish after recovery attempts."
-    }
-}
 
 # If AL-Go generated a new run-specific name, map a persistent cache container to it.
 if ((-not (Test-BcContainer -containerName $parameters.containerName)) -and (Test-BcContainer -containerName $persistentContainerName)) {
@@ -238,6 +123,18 @@ if (Test-BcContainer -containerName $parameters.containerName) {
             throw "Container '$($parameters.containerName)' did not reach running state after start."
         }
 
+        # Stop BC service BEFORE database restore to prevent stale in-memory state.
+        # If BC is running during snapshot restore, its metadata becomes inconsistent
+        # with the DB, causing OperationalWithSyncPending and failed restarts.
+        Invoke-ScriptInBcContainer -containerName $parameters.containerName -scriptblock {
+            $bc = Get-Service 'MicrosoftDynamicsNavServer$BC' -ErrorAction SilentlyContinue
+            if ($null -ne $bc -and $bc.Status -eq 'Running') {
+                Write-Host "Stopping BC service tier before database restore..."
+                Stop-Service 'MicrosoftDynamicsNavServer$BC' -Force
+                $bc.WaitForStatus('Stopped', [TimeSpan]::FromMinutes(1))
+            }
+        }
+
         Invoke-Sqlcmd -ConnectionString $connectionString -Query $restoreScript -QueryTimeout 600
 
         Write-Host "Recreating database snapshot '$snapshotName' ..."
@@ -246,8 +143,14 @@ if (Test-BcContainer -containerName $parameters.containerName) {
         if ($currentHash -ne $storedHash) { Set-Content -Path $hashFile -Value $currentHash }
 
         Ensure-ReusedContainerServices -containerName $parameters.containerName
-        Ensure-BcServiceRunningWithRecovery -containerName $parameters.containerName
-        Ensure-TenantReadyForPublish -containerName $parameters.containerName
+
+        # Start BC service fresh against the restored database.
+        Invoke-ScriptInBcContainer -containerName $parameters.containerName -scriptblock {
+            Write-Host "Starting BC service tier after database restore..."
+            Start-Service 'MicrosoftDynamicsNavServer$BC'
+            (Get-Service 'MicrosoftDynamicsNavServer$BC').WaitForStatus('Running', [TimeSpan]::FromMinutes(2))
+            Write-Host "BC service tier started successfully."
+        }
 
         return
     }
