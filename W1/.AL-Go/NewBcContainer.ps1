@@ -69,6 +69,7 @@ ALTER DATABASE [$databaseName] SET RECOVERY SIMPLE, MULTI_USER;
 }
 
 $snapshotScript = @"
+IF DB_ID(N'$snapshotName') IS NOT NULL DROP DATABASE [$snapshotName];
 CREATE DATABASE [$snapshotName] ON
     (NAME = N'$dataLogicalName', FILENAME = N'$snapshotFile')
 AS SNAPSHOT OF [$databaseName];
