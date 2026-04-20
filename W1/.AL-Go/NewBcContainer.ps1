@@ -123,16 +123,13 @@ if (Test-BcContainer -containerName $parameters.containerName) {
             throw "Container '$($parameters.containerName)' did not reach running state after start."
         }
 
-        # Stop BC service BEFORE database restore to prevent stale in-memory state.
-        # If BC is running during snapshot restore, its metadata becomes inconsistent
-        # with the DB, causing OperationalWithSyncPending and failed restarts.
+        Ensure-ReusedContainerServices -containerName $parameters.containerName
+
+        # Dismount tenant so BC releases all connections to the database.
+        # BC service stays running (it cannot be restarted in Hyper-V containers).
+        Write-Host "Dismounting tenant 'default' before database restore..."
         Invoke-ScriptInBcContainer -containerName $parameters.containerName -scriptblock {
-            $bc = Get-Service 'MicrosoftDynamicsNavServer$BC' -ErrorAction SilentlyContinue
-            if ($null -ne $bc -and $bc.Status -eq 'Running') {
-                Write-Host "Stopping BC service tier before database restore..."
-                Stop-Service 'MicrosoftDynamicsNavServer$BC' -Force
-                $bc.WaitForStatus('Stopped', [TimeSpan]::FromMinutes(1))
-            }
+            Dismount-NAVTenant -ServerInstance BC -Tenant default -Force
         }
 
         Invoke-Sqlcmd -ConnectionString $connectionString -Query $restoreScript -QueryTimeout 600
@@ -142,15 +139,16 @@ if (Test-BcContainer -containerName $parameters.containerName) {
 
         if ($currentHash -ne $storedHash) { Set-Content -Path $hashFile -Value $currentHash }
 
-        Ensure-ReusedContainerServices -containerName $parameters.containerName
-
-        # Start BC service fresh against the restored database.
+        # Remount tenant against the freshly restored database.
+        Write-Host "Mounting tenant 'default' after database restore..."
         Invoke-ScriptInBcContainer -containerName $parameters.containerName -scriptblock {
-            Write-Host "Starting BC service tier after database restore..."
-            Start-Service 'MicrosoftDynamicsNavServer$BC'
-            (Get-Service 'MicrosoftDynamicsNavServer$BC').WaitForStatus('Running', [TimeSpan]::FromMinutes(2))
-            Write-Host "BC service tier started successfully."
-        }
+            Param($dbServer, $dbName)
+            Mount-NAVTenant -ServerInstance BC -Tenant default `
+                -DatabaseServer $dbServer -DatabaseName $dbName `
+                -OverwriteTenantIdInDatabase
+            $tenant = Get-NAVTenant -ServerInstance BC -Tenant default
+            Write-Host "Tenant state after mount: $($tenant.State)"
+        } -argumentList $databaseServer, $databaseName
 
         return
     }
