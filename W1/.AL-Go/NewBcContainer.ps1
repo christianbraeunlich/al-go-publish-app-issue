@@ -92,16 +92,30 @@ function Ensure-ReusedContainerServices {
     }
 }
 
-function Restart-BcServiceWithRecovery {
+function Ensure-BcServiceRunningWithRecovery {
     Param(
         [string]$containerName
     )
 
+    $alreadyRunning = Invoke-ScriptInBcContainer -containerName $containerName -scriptblock {
+        (Get-Service 'MicrosoftDynamicsNavServer$BC').Status -eq 'Running'
+    }
+    if ([bool]$alreadyRunning) {
+        Write-Host "BC service tier is already running - no restart needed."
+        return
+    }
+
     $lastErrorMessage = ''
     for ($attempt = 1; $attempt -le 2; $attempt++) {
         try {
-            Write-Host "Restarting BC service tier (attempt $attempt)..."
-            Restart-BcContainerServiceTier -containerName $containerName
+            Write-Host "Starting BC service tier (attempt $attempt)..."
+            Invoke-ScriptInBcContainer -containerName $containerName -scriptblock {
+                $bc = Get-Service 'MicrosoftDynamicsNavServer$BC'
+                if ($bc.Status -ne 'Running') {
+                    Start-Service 'MicrosoftDynamicsNavServer$BC'
+                    $bc.WaitForStatus('Running', [TimeSpan]::FromMinutes(2))
+                }
+            }
 
             $serviceRunning = Invoke-ScriptInBcContainer -containerName $containerName -scriptblock {
                 (Get-Service 'MicrosoftDynamicsNavServer$BC').Status -eq 'Running'
@@ -117,7 +131,7 @@ function Restart-BcServiceWithRecovery {
         }
 
         if ($attempt -lt 2) {
-            Write-Host "BC service restart failed, retrying after SQL service recovery..."
+            Write-Host "BC service start failed, retrying after SQL service recovery..."
             Ensure-ReusedContainerServices -containerName $containerName
         }
     }
@@ -162,8 +176,7 @@ if (Test-BcContainer -containerName $parameters.containerName) {
         if ($currentHash -ne $storedHash) { Set-Content -Path $hashFile -Value $currentHash }
 
         Ensure-ReusedContainerServices -containerName $parameters.containerName
-        Write-Host "Restarting BC service tier to pick up restored database ..."
-        Restart-BcServiceWithRecovery -containerName $parameters.containerName
+        Ensure-BcServiceRunningWithRecovery -containerName $parameters.containerName
 
         return
     }
