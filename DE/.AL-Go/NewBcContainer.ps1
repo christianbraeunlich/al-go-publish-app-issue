@@ -73,10 +73,10 @@ CREATE DATABASE [$snapshotName] ON
 AS SNAPSHOT OF [$databaseName];
 "@
 
-# If the container already exists, reuse it — only restore the DB and restart the service tier.
+# If the container already exists, reuse it - only restore the DB and restart the service tier.
 # RemoveBcContainer.ps1 is intentionally empty, so the container persists between CI runs.
 if (Test-BcContainer -containerName $parameters.containerName) {
-    Write-Host "Container '$($parameters.containerName)' already exists — reusing (skipping container rebuild)."
+    Write-Host "Container '$($parameters.containerName)' already exists - reusing (skipping container rebuild)."
 
     # Ensure the container is running (no-op if already running)
     docker start $parameters.containerName 2>&1 | Out-Null
@@ -94,7 +94,7 @@ if (Test-BcContainer -containerName $parameters.containerName) {
     return
 }
 
-# Container does not exist — full setup
+# Container does not exist - full setup
 Invoke-Sqlcmd -ConnectionString $connectionString -Query $restoreScript -QueryTimeout 600
 
 Write-Host "Creating database snapshot '$snapshotName' ..."
