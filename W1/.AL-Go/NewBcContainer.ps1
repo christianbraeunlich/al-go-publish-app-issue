@@ -76,6 +76,55 @@ CREATE DATABASE [$snapshotName] ON
 AS SNAPSHOT OF [$databaseName];
 "@
 
+function Ensure-ReusedContainerServices {
+    Param(
+        [string]$containerName
+    )
+
+    # Reused containers can come back with SQL Server stopped; start it before BC service tier.
+    Invoke-ScriptInBcContainer -containerName $containerName -scriptblock {
+        $sql = Get-Service 'MSSQL$SQLEXPRESS' -ErrorAction SilentlyContinue
+        if ($null -ne $sql -and $sql.Status -ne 'Running') {
+            Write-Host "Starting SQL service MSSQL`$SQLEXPRESS in reused container..."
+            Start-Service 'MSSQL$SQLEXPRESS'
+            $sql.WaitForStatus('Running', [TimeSpan]::FromMinutes(2))
+        }
+    }
+}
+
+function Restart-BcServiceWithRecovery {
+    Param(
+        [string]$containerName
+    )
+
+    $lastErrorMessage = ''
+    for ($attempt = 1; $attempt -le 2; $attempt++) {
+        try {
+            Write-Host "Restarting BC service tier (attempt $attempt)..."
+            Restart-BcContainerServiceTier -containerName $containerName
+
+            $serviceRunning = Invoke-ScriptInBcContainer -containerName $containerName -scriptblock {
+                (Get-Service 'MicrosoftDynamicsNavServer$BC').Status -eq 'Running'
+            }
+            if ([bool]$serviceRunning) {
+                return
+            }
+
+            $lastErrorMessage = 'BC service tier is not running after restart.'
+        }
+        catch {
+            $lastErrorMessage = $_.Exception.Message
+        }
+
+        if ($attempt -lt 2) {
+            Write-Host "BC service restart failed, retrying after SQL service recovery..."
+            Ensure-ReusedContainerServices -containerName $containerName
+        }
+    }
+
+    throw $lastErrorMessage
+}
+
 # If AL-Go generated a new run-specific name, map a persistent cache container to it.
 if ((-not (Test-BcContainer -containerName $parameters.containerName)) -and (Test-BcContainer -containerName $persistentContainerName)) {
     Write-Host "Found persistent container '$persistentContainerName'. Renaming to '$($parameters.containerName)' for this run."
@@ -112,15 +161,9 @@ if (Test-BcContainer -containerName $parameters.containerName) {
 
         if ($currentHash -ne $storedHash) { Set-Content -Path $hashFile -Value $currentHash }
 
+        Ensure-ReusedContainerServices -containerName $parameters.containerName
         Write-Host "Restarting BC service tier to pick up restored database ..."
-        Restart-BcContainerServiceTier -containerName $parameters.containerName
-
-        $serviceRunning = Invoke-ScriptInBcContainer -containerName $parameters.containerName -scriptblock {
-            (Get-Service 'MicrosoftDynamicsNavServer$BC').Status -eq 'Running'
-        }
-        if (-not [bool]$serviceRunning) {
-            throw "BC service tier is not running after restart."
-        }
+        Restart-BcServiceWithRecovery -containerName $parameters.containerName
 
         return
     }
