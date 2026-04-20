@@ -21,6 +21,7 @@ $snapshotFile     = 'C:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\M
 $databaseSecurePassword = ConvertTo-SecureString -String $databasePassword -AsPlainText -Force
 $databaseCredential     = New-Object pscredential $databaseUsername, $databaseSecurePassword
 $connectionString       = "Server=localhost;Database=master;User Id=$databaseUsername;Password=$databasePassword;"
+$persistentContainerName = 'bcW1persistent'
 
 # Determine whether a valid snapshot exists for the current backup
 $currentHash = (Get-FileHash -Path $backupPath -Algorithm MD5).Hash
@@ -74,6 +75,12 @@ CREATE DATABASE [$snapshotName] ON
     (NAME = N'$dataLogicalName', FILENAME = N'$snapshotFile')
 AS SNAPSHOT OF [$databaseName];
 "@
+
+# If AL-Go generated a new run-specific name, map a persistent cache container to it.
+if ((-not (Test-BcContainer -containerName $parameters.containerName)) -and (Test-BcContainer -containerName $persistentContainerName)) {
+    Write-Host "Found persistent container '$persistentContainerName'. Renaming to '$($parameters.containerName)' for this run."
+    docker rename $persistentContainerName $parameters.containerName 2>&1 | Out-Null
+}
 
 # If the container already exists, reuse it - only restore the DB and restart the service tier.
 # RemoveBcContainer.ps1 is intentionally empty, so the container persists between CI runs.
