@@ -138,6 +138,48 @@ function Ensure-BcServiceRunningWithRecovery {
     throw $lastErrorMessage
 }
 
+function Ensure-TenantReadyForPublish {
+    Param(
+        [string]$containerName
+    )
+
+    Invoke-ScriptInBcContainer -containerName $containerName -scriptblock {
+        $serverInstance = 'BC'
+        $tenantId = 'default'
+
+        if (-not (Get-Command Get-NAVTenant -ErrorAction SilentlyContinue)) {
+            Write-Host 'Get-NAVTenant is not available in this container, skipping tenant state validation.'
+            return
+        }
+
+        $tenant = Get-NAVTenant -ServerInstance $serverInstance -Tenant $tenantId -ErrorAction Stop
+        Write-Host "Current tenant state: $($tenant.State)"
+
+        if ($tenant.State -eq 'OperationalWithSyncPending') {
+            Write-Host 'Tenant is OperationalWithSyncPending. Trying Sync-NAVTenant -Mode Sync...'
+            try {
+                Sync-NAVTenant -ServerInstance $serverInstance -Tenant $tenantId -Mode Sync -Force -ErrorAction Stop
+            }
+            catch {
+                Write-Host 'Sync mode failed, retrying with -Mode ForceSync...'
+                Sync-NAVTenant -ServerInstance $serverInstance -Tenant $tenantId -Mode ForceSync -Force -ErrorAction Stop
+            }
+        }
+
+        for ($i = 0; $i -lt 30; $i++) {
+            $tenant = Get-NAVTenant -ServerInstance $serverInstance -Tenant $tenantId -ErrorAction Stop
+            if ($tenant.State -eq 'Operational') {
+                Write-Host 'Tenant state is Operational.'
+                return
+            }
+            Start-Sleep -Seconds 2
+        }
+
+        $tenant = Get-NAVTenant -ServerInstance $serverInstance -Tenant $tenantId -ErrorAction Stop
+        throw "Tenant state is '$($tenant.State)' and not ready for app publish."
+    }
+}
+
 # If AL-Go generated a new run-specific name, map a persistent cache container to it.
 if ((-not (Test-BcContainer -containerName $parameters.containerName)) -and (Test-BcContainer -containerName $persistentContainerName)) {
     Write-Host "Found persistent container '$persistentContainerName'. Renaming to '$($parameters.containerName)' for this run."
@@ -176,6 +218,7 @@ if (Test-BcContainer -containerName $parameters.containerName) {
 
         Ensure-ReusedContainerServices -containerName $parameters.containerName
         Ensure-BcServiceRunningWithRecovery -containerName $parameters.containerName
+        Ensure-TenantReadyForPublish -containerName $parameters.containerName
 
         return
     }
